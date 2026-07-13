@@ -4,7 +4,7 @@ import { SplashScreen, Stack } from "expo-router";
 import { useEffect } from 'react';
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     'sans-regular': require('../assets/fonts/PlusJakartaSans-Regular.ttf'),
     'sans-bold': require('../assets/fonts/PlusJakartaSans-Bold.ttf'),
     'sans-medium': require('../assets/fonts/PlusJakartaSans-Medium.ttf'),
@@ -17,8 +17,12 @@ export default function RootLayout() {
     if (fontsLoaded) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded]);
+    if (fontError) {
+      console.error('Font loading failed:', fontError);
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded, fontError]);
 
-  if (!fontsLoaded) return null;
+  if (!fontsLoaded && !fontError) return null;
   return <Stack screenOptions={{ headerShown: false }} />;
 } 

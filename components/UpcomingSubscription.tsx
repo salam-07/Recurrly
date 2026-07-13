@@ -10,7 +10,7 @@ const UpcomingSubscription = ({ name, price, daysLeft, icon, currency }: Upcomin
                 <View>
                     <Text className="upcoming-price">{formatCurrency(price, currency)}</Text>
                     <Text className="upcoming-meta" numberOfLines={1}>
-                        {daysLeft > 1 ? `${daysLeft} days left` : 'Last Dat'}
+                        {daysLeft > 1 ? `${daysLeft} days left` : 'Last Day'}
                     </Text>
                 </View>
             </View>
