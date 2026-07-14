@@ -1,10 +1,8 @@
-import type { ExpoConfig } from 'expo/config';
-
 import appJson from './app.json';
 
-const config = appJson.expo as ExpoConfig;
+const config = appJson.expo;
 
-export default (): ExpoConfig => ({
+export default () => ({
   ...config,
   extra: {
     ...config.extra,
