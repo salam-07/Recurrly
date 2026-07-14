@@ -1,4 +1,9 @@
-import appJson from './app.json';
+import fs from 'fs';
+import path from 'path';
+
+// Read the app.json file directly using Node's File System
+const appJsonPath = path.resolve(__dirname, './app.json');
+const appJson = JSON.parse(fs.readFileSync(appJsonPath, 'utf8'));
 
 const config = appJson.expo;
 
