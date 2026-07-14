@@ -1,6 +1,7 @@
 import { useSignIn } from '@clerk/expo';
 import { Link, useRouter, type Href } from 'expo-router';
 import { styled } from 'nativewind';
+import { usePostHog } from 'posthog-react-native';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView as RNSafeAreaView } from 'react-native-safe-area-context';
@@ -10,6 +11,7 @@ const SafeAreaView = styled(RNSafeAreaView);
 const SignIn = () => {
   const { signIn, errors, fetchStatus } = useSignIn();
   const router = useRouter();
+  const posthog = usePostHog();
 
   const [emailAddress, setEmailAddress] = useState('');
   const [password, setPassword] = useState('');
@@ -27,46 +29,71 @@ const SignIn = () => {
   const handleSubmit = async () => {
     if (!formValid) return;
 
-    const { error } = await signIn.password({
-      emailAddress,
-      password,
-    });
+    try {
+      const { error } = await signIn.password({
+        emailAddress,
+        password,
+      });
 
-    if (error) {
-      console.error(JSON.stringify(error, null, 2));
-      return;
-    }
+      if (error) {
+        console.error(JSON.stringify(error, null, 2));
+        posthog.captureException(new Error('Sign in failed'), {
+          context: 'sign_in_password',
+          clerk_error: JSON.stringify(error),
+        });
+        return;
+      }
 
-    if (signIn.status === 'complete') {
-      await signIn.finalize({
-        navigate: ({ session, decorateUrl }) => {
-          if (session?.currentTask) {
-            console.log(session?.currentTask);
-            return;
-          }
-
-          const url = decorateUrl('/(tabs)');
-          if (url.startsWith('http')) {
-            window.location.href = url;
-          } else {
-            router.replace(url as Href);
-          }
+      posthog.identify(emailAddress, {
+        $set: {
+          email: emailAddress,
+          auth_provider: 'clerk',
+        },
+        $set_once: {
+          first_seen_platform: 'expo',
         },
       });
-    } else if (signIn.status === 'needs_second_factor') {
-      // Handle MFA if needed (not implemented in this basic flow)
-      console.log('MFA required');
-    } else if (signIn.status === 'needs_client_trust') {
-      // Send email code for client trust verification
-      const emailCodeFactor = signIn.supportedSecondFactors.find(
-        (factor) => factor.strategy === 'email_code'
-      );
+      posthog.capture('sign_in_submitted', {
+        auth_method: 'password',
+        has_client_trust_step: signIn.status === 'needs_client_trust',
+      });
 
-      if (emailCodeFactor) {
-        await signIn.mfa.sendEmailCode();
+      if (signIn.status === 'complete') {
+        await signIn.finalize({
+          navigate: ({ session, decorateUrl }) => {
+            if (session?.currentTask) {
+              console.log(session?.currentTask);
+              return;
+            }
+
+            const url = decorateUrl('/(tabs)');
+            if (url.startsWith('http')) {
+              window.location.href = url;
+            } else {
+              router.replace(url as Href);
+            }
+          },
+        });
+      } else if (signIn.status === 'needs_second_factor') {
+        // Handle MFA if needed (not implemented in this basic flow)
+        console.log('MFA required');
+      } else if (signIn.status === 'needs_client_trust') {
+        // Send email code for client trust verification
+        const emailCodeFactor = signIn.supportedSecondFactors.find(
+          (factor) => factor.strategy === 'email_code'
+        );
+
+        if (emailCodeFactor) {
+          await signIn.mfa.sendEmailCode();
+        }
+      } else {
+        console.error('Sign-in attempt not complete:', signIn);
       }
-    } else {
-      console.error('Sign-in attempt not complete:', signIn);
+    } catch (error) {
+      posthog.captureException(error instanceof Error ? error : new Error('Unknown sign in error'), {
+        context: 'sign_in_submit',
+      });
+      console.error('Unexpected sign-in error:', error);
     }
   };
 
@@ -267,7 +294,7 @@ const SignIn = () => {
 
             {/* Sign-Up Link */}
             <View className="auth-link-row">
-              <Text className="auth-link-copy">Don't have an account?</Text>
+              <Text className="auth-link-copy">Don&apos;t have an account?</Text>
               <Link href="/(auth)/sign-up" asChild>
                 <Pressable>
                   <Text className="auth-link">Create Account</Text>
