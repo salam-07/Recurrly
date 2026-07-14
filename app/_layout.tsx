@@ -5,6 +5,7 @@ import { ClerkProvider } from '@clerk/expo';
 import { tokenCache } from '@clerk/expo/token-cache';
 import { useFonts } from "expo-font";
 import { SplashScreen, Stack, useGlobalSearchParams, usePathname } from "expo-router";
+import { StatusBar } from 'expo-status-bar';
 import { PostHogProvider } from 'posthog-react-native';
 import { useEffect, useRef } from "react";
 
@@ -69,6 +70,7 @@ function PostHogRootLayout({ fontsLoaded }: { fontsLoaded: boolean; }) {
         maxElementsCaptured: 20,
       }}
     >
+      <StatusBar style="dark" />
       <SubscriptionsProvider>
         <Stack screenOptions={{ headerShown: false }} />
       </SubscriptionsProvider>
