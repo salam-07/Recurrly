@@ -1,11 +1,12 @@
 import '@/global.css';
+import { posthog } from '@/lib/posthog';
+import { SubscriptionsProvider } from '@/lib/subscriptionsContext';
 import { ClerkProvider } from '@clerk/expo';
 import { tokenCache } from '@clerk/expo/token-cache';
 import { useFonts } from "expo-font";
 import { SplashScreen, Stack, useGlobalSearchParams, usePathname } from "expo-router";
-import { useEffect, useRef } from "react";
 import { PostHogProvider } from 'posthog-react-native';
-import { posthog } from '@/lib/posthog';
+import { useEffect, useRef } from "react";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -32,7 +33,7 @@ export default function RootLayout() {
   );
 }
 
-function PostHogRootLayout({ fontsLoaded }: { fontsLoaded: boolean }) {
+function PostHogRootLayout({ fontsLoaded }: { fontsLoaded: boolean; }) {
   const pathname = usePathname();
   const params = useGlobalSearchParams();
   const previousPathname = useRef<string | undefined>(undefined);
@@ -68,7 +69,9 @@ function PostHogRootLayout({ fontsLoaded }: { fontsLoaded: boolean }) {
         maxElementsCaptured: 20,
       }}
     >
-      <Stack screenOptions={{ headerShown: false }} />
+      <SubscriptionsProvider>
+        <Stack screenOptions={{ headerShown: false }} />
+      </SubscriptionsProvider>
     </PostHogProvider>
   );
 }
