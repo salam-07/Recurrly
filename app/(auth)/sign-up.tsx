@@ -1,6 +1,7 @@
 import { useAuth, useSignUp } from '@clerk/expo';
 import { Link, useRouter, type Href } from 'expo-router';
 import { styled } from 'nativewind';
+import { usePostHog } from 'posthog-react-native';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView as RNSafeAreaView } from 'react-native-safe-area-context';
@@ -11,6 +12,7 @@ const SignUp = () => {
   const { signUp, errors, fetchStatus } = useSignUp();
   const { isSignedIn } = useAuth();
   const router = useRouter();
+  const posthog = usePostHog();
 
   const [emailAddress, setEmailAddress] = useState('');
   const [password, setPassword] = useState('');
@@ -28,45 +30,87 @@ const SignUp = () => {
   const handleSubmit = async () => {
     if (!formValid) return;
 
-    const { error } = await signUp.password({
-      emailAddress,
-      password,
-    });
+    try {
+      const { error } = await signUp.password({
+        emailAddress,
+        password,
+      });
 
-    if (error) {
-      console.error(JSON.stringify(error, null, 2));
-      return;
-    }
+      if (error) {
+        console.error(JSON.stringify(error, null, 2));
+        posthog.captureException(new Error('Sign up failed'), {
+          context: 'sign_up_password',
+          clerk_error: JSON.stringify(error),
+        });
+        return;
+      }
 
-    // Send verification email
-    if (!error) {
+      posthog.identify(emailAddress, {
+        $set: {
+          email: emailAddress,
+          auth_provider: 'clerk',
+          signup_method: 'email_password',
+        },
+        $set_once: {
+          first_seen_platform: 'expo',
+        },
+      });
+      posthog.capture('sign_up_submitted', {
+        auth_method: 'password',
+      });
+
       await signUp.verifications.sendEmailCode();
+    } catch (error) {
+      posthog.captureException(error instanceof Error ? error : new Error('Unknown sign up error'), {
+        context: 'sign_up_submit',
+      });
+      console.error('Unexpected sign-up error:', error);
     }
   };
 
   const handleVerify = async () => {
-    await signUp.verifications.verifyEmailCode({
-      code,
-    });
-
-    if (signUp.status === 'complete') {
-      await signUp.finalize({
-        navigate: ({ session, decorateUrl }) => {
-          if (session?.currentTask) {
-            console.log(session?.currentTask);
-            return;
-          }
-
-          const url = decorateUrl('/(tabs)');
-          if (url.startsWith('http')) {
-            window.location.href = url;
-          } else {
-            router.replace(url as Href);
-          }
-        },
+    try {
+      await signUp.verifications.verifyEmailCode({
+        code,
       });
-    } else {
-      console.error('Sign-up attempt not complete:', signUp);
+
+      if (signUp.status === 'complete') {
+        posthog.identify(emailAddress, {
+          $set: {
+            email: emailAddress,
+            auth_provider: 'clerk',
+            signup_verified: true,
+          },
+          $set_once: {
+            first_seen_platform: 'expo',
+          },
+        });
+        posthog.capture('email_verification_completed', {
+          verification_channel: 'email_code',
+        });
+        await signUp.finalize({
+          navigate: ({ session, decorateUrl }) => {
+            if (session?.currentTask) {
+              console.log(session?.currentTask);
+              return;
+            }
+
+            const url = decorateUrl('/(tabs)');
+            if (url.startsWith('http')) {
+              window.location.href = url;
+            } else {
+              router.replace(url as Href);
+            }
+          },
+        });
+      } else {
+        console.error('Sign-up attempt not complete:', signUp);
+      }
+    } catch (error) {
+      posthog.captureException(error instanceof Error ? error : new Error('Unknown verification error'), {
+        context: 'sign_up_verify_email',
+      });
+      console.error('Unexpected sign-up verification error:', error);
     }
   };
 
